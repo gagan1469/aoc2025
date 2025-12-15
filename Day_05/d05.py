@@ -1,4 +1,3 @@
-K_ROLL = '@'
 # read the inputs
 def load_data_set(data_file: str, delimiter: str = '\n') -> list:
     with open(data_file, 'r') as f:

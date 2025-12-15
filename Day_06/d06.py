@@ -1,4 +1,6 @@
-K_ROLL = '@'
+K_MULTIPLY = '*'
+K_ADD = '+'
+
 # read the inputs
 def load_data_set(data_file: str, delimiter: str = '\n') -> list:
     with open(data_file, 'r') as f:
@@ -14,19 +16,10 @@ def load_data_set(data_file: str, delimiter: str = '\n') -> list:
         m[i] = n
 
     size = [len(m), len(n)]    
-    print(m)
+    # print(m)
     return m, size
 
-def main():
-    K_MULTIPLY = '*'
-    K_ADD = '+'
-
-    fname = 'Day_06\inputs.txt'
-    # fname = 'Day_06\sample_inputs.txt'
-
-    m, size = load_data_set(data_file=fname)
-    print(size)
-
+def part1_grand_total(m: list) -> None:
     grand_total = 0
     row = 0
     for c in range(0, len(m[row])):
@@ -54,6 +47,14 @@ def main():
     
     print(grand_total)
 
+def main():
+    fname = 'Day_06\inputs.txt'
+    # fname = 'Day_06\sample_inputs.txt'
+
+    m, size = load_data_set(data_file=fname)
+    print(size)
+
+    part1_grand_total(m)
 
 if __name__ == '__main__':
     main()
