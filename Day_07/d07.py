@@ -1,27 +1,10 @@
-K_MULTIPLY = '*'
-K_ADD = '+'
+K_ENTRY = 'S'
+K_SPLITTER = '^'
+K_EMPTY = '.'
+K_BEAM = '|'
 
 # read the inputs
-def part1_load_data_set(data_file: str, delimiter: str = '\n') -> list:
-    with open(data_file, 'r') as f:
-        lines = f.read().split(delimiter)
-
-    # convert to matrix
-    m = [''] * len(lines)
-    for i, line in enumerate(lines):
-        items = line.split()
-        n = [''] * len(items)
-        for j, c in enumerate(items):
-            n[j] = c
-        m[i] = n
-
-    size = [len(m), len(n)]    
-    # print(m)
-    return m, size
-
-# read the inputs
-# in part 2, the left/right alignment of numbers within each problem CANNOT be ignored.
-def part2_load_data_set(data_file: str, delimiter: str = '\n') -> list:
+def load_data_set(data_file: str, delimiter: str = '\n') -> list:
     with open(data_file, 'r') as f:
         lines = f.read().split(delimiter)
 
@@ -30,99 +13,82 @@ def part2_load_data_set(data_file: str, delimiter: str = '\n') -> list:
     for i, line in enumerate(lines):
         m[i] = list(line)
 
-    # print(m)
     return m
 
-def part1_grand_total(m: list) -> None:
-    grand_total = 0
-    row = 0
-    for c in range(0, len(m[row])):
-        operation = m[len(m)-1][c]
-        # print(f'Operation: {operation}')
+def get_all_indices(line: list, token: str) -> list:
+    indices = []
+    pos = 0
+    while True:
+        try:
+            idx = line.index(token, pos)
+        except ValueError as e:
+            break
 
-        nums = []
-        for r in range(0, len(m)-1):
-            num = int(m[r][c])
-            nums.append(num)
-        
-        result = compute_problem(numbers=nums, operation=operation)
-        # print(result)
-        grand_total += result
-        row += 1
-    
-    return grand_total
+        indices.append(idx)
+        pos = idx + 1
 
-def part2_cephalopod_math(m):
-    grand_total = 0
-    
-    # bottom row is the operations
-    bottom_row = m[len(m) - 1]
-    bottom_row = ''.join(bottom_row)
-    ops = bottom_row.split()
-    
-    total_problems = len(ops)
-    problem_rows = len(m) - 1
-    pointer = 0
-    max_pointer = len(bottom_row)
-    problem_count = 0
-    quantities = []
-    qty = ''
+    return indices
 
-    while problem_count < total_problems:
-        op = ops[problem_count]
+def process_line_beams(line: list) -> list:
+    beam_indices = get_all_indices(line=line, token=K_BEAM)
+    return beam_indices
 
-        while pointer < max_pointer:        
-            # get the whole column
-            for r in range(0, problem_rows):
-                qty += m[r][pointer]
+def process_line_splitters(line: list) -> list:
+    splitter_indices = get_all_indices(line=line, token=K_SPLITTER)
+    return splitter_indices
 
-            # if it's an empty row, new problem is starting
-            if len(qty.strip()) == 0:
-                pointer += 1
-                break
+def process_first_line(first_line: list) -> list:
+    start_index = get_all_indices(line=first_line, token=K_ENTRY)
+    return start_index
 
-            num = int(qty.strip())
-            quantities.append(num)
-            qty = ''
-            pointer += 1
-
-        print(quantities, op)
-        computed_value = compute_problem(numbers=quantities, operation=op)
-        print(computed_value)
-        grand_total += computed_value
-
-        quantities = []
-        problem_count += 1
-    
-    return grand_total
-
-def compute_problem(numbers: list, operation: str) -> int:
-    if operation == K_MULTIPLY:
-        result = 1
-    else:
-        result = 0
-
-    for num in numbers:
-        if operation == K_MULTIPLY:
-            result *= num
+def advance_beams(previous_line_beams: list, line_splitters: list, line: list) -> tuple[int, list]:
+    split_count = 0
+    for beam in previous_line_beams:
+        if beam in line_splitters:
+            split_count += 1
+            try:    
+                line[beam-1] = K_BEAM
+            except IndexError as e:
+                # beam falls off the edge
+                continue
+            try:
+                line[beam+1] = K_BEAM
+            except IndexError as e:
+                # beam falls off the edge
+                continue
         else:
-            result += num
-
-    return result
+            line[beam] = K_BEAM
+    
+    return split_count, line
 
 def main():
-    fname = 'Day_07\inputs.txt'
-    fname = 'Day_07\sample_inputs.txt'
+    fname = r'Day_07\inputs.txt'
+    # fname = r'Day_07\sample_inputs.txt'
 
-    m, size = part1_load_data_set(data_file=fname)
-    print(size)
+    m = load_data_set(data_file=fname)
+    
+    start_index = process_first_line(m[0])
+    print(start_index)
 
-    grand_total = part1_grand_total(m)
-    print(f'Part 1 result: {grand_total}')
+    # initialize beam
+    updated_line = advance_beams(previous_line_beams=start_index, line_splitters=[], line=m[0])
+    print(updated_line)
+    
+    previous_line_beams = start_index
+    # previous_line = updated_line
+    pos = 1
+    total_splits = 0
+    while pos < len(m):
+        line = m[pos]
+        splitter_indices = process_line_splitters(line=line)
+        split_count, updated_line = advance_beams(previous_line_beams=previous_line_beams, line_splitters=splitter_indices, line=line)
+        total_splits += split_count
+        print(f'Line {pos}, {updated_line}')
+        previous_line_beams = process_line_beams(line=updated_line)
+        pos += 1
 
-    m = part2_load_data_set(data_file=fname)
-    grand_total = part2_cephalopod_math(m)
-    print(f'Part 2 result: {grand_total}')
+    
+    print(f'Part 1: The answer is {total_splits}')
 
 if __name__ == '__main__':
     main()
