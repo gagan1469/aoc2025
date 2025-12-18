@@ -61,6 +61,32 @@ def advance_beams(previous_line_beams: list, line_splitters: list, line: list) -
     
     return split_count, line
 
+def propagate_timelines(line: list, previous_line: list, previous_line_beam_indices: list) -> list:
+
+    # if the corresponding position in current line is a beam, set its timeline value from the previous line
+    for idx in previous_line_beam_indices:
+        if line[idx]  == K_BEAM:
+            previous_timeline_count = previous_line[idx]
+            line[idx] = previous_line[idx]
+
+    # now add the split timelines
+    for idx in previous_line_beam_indices:
+        if line[idx] == K_SPLITTER:
+            previous_timeline_count = previous_line[idx]
+
+            if isinstance(line[idx-1], int):
+                line[idx-1] = line[idx-1] + previous_timeline_count
+            else:
+                line[idx-1] = previous_timeline_count
+
+            if isinstance(line[idx+1], int):
+                line[idx+1] = line[idx+1] + previous_timeline_count
+            else:
+                line[idx+1] = previous_timeline_count            
+
+    #print(f'Output line: {line}')
+    return line
+
 def main():
     fname = r'Day_07\inputs.txt'
     # fname = r'Day_07\sample_inputs.txt'
@@ -75,7 +101,6 @@ def main():
     print(updated_line)
     
     previous_line_beams = start_index
-    # previous_line = updated_line
     pos = 1
     total_splits = 0
     while pos < len(m):
@@ -83,12 +108,41 @@ def main():
         splitter_indices = process_line_splitters(line=line)
         split_count, updated_line = advance_beams(previous_line_beams=previous_line_beams, line_splitters=splitter_indices, line=line)
         total_splits += split_count
-        print(f'Line {pos}, {updated_line}')
+        # print(f'Line {pos}, {updated_line}')
         previous_line_beams = process_line_beams(line=updated_line)
         pos += 1
 
     
     print(f'Part 1: The answer is {total_splits}')
+    # print(f'After all splits:')
+    # for line in m:
+    #     print(line)
+
+    # Part 2 - count the timelines
+    # start with all the splits already done
+    pos = 0
+    previous_line = m[pos]
+    previous_beam_indices = process_line_beams(previous_line)
+    for idx in previous_beam_indices:
+        previous_line[idx] = 1
+
+    while pos < len(m)-1:
+        pos += 1
+        line = m[pos]
+        beam_indices = process_line_beams(line)
+        line = propagate_timelines(line, previous_line, previous_beam_indices)
+        m[pos] = line
+        # print(line)        
+        
+        previous_line = line
+        previous_beam_indices = beam_indices
+
+    sum = 0
+    for i in line:
+        if isinstance(i, int):
+            sum += i
+
+    print(f'Part 2: The total number of timelines is {sum}')
 
 if __name__ == '__main__':
     main()
