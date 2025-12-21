@@ -25,7 +25,7 @@ def calculate_tiles_in_area(node1, node2) -> int:
     area = x*y
     return area
 
-def part1_answer(all_nodes: list) -> None:
+def part1_answer(all_nodes: list) -> int:
     # use itertools to generate a combination of 2 nodes
     biggest_area = 0
     for node1, node2 in itertools.combinations(all_nodes, 2):
@@ -34,6 +34,7 @@ def part1_answer(all_nodes: list) -> None:
             biggest_area = area
 
     print(f'Biggest area: {biggest_area}')
+    return biggest_area
 
 def part2_answer(grid: list, all_nodes: list) -> None:
     # use itertools to generate a combination of 2 nodes
@@ -52,6 +53,16 @@ def part2_answer(grid: list, all_nodes: list) -> None:
         print(f'Running {i} biggest area {biggest_area}')
 
     print(f'Biggest area: {biggest_area}')
+
+def big_area_candidates(biggest_area: int, all_nodes: list, threshold: int = 0.25) -> list:
+    candidates = []
+    for node1, node2 in itertools.combinations(all_nodes, 2):
+        area = calculate_tiles_in_area(node1=node1, node2=node2)
+        if area > threshold * biggest_area:
+            candidates.append((node1, node2, area))
+
+    candidates = sorted(candidates, key=lambda x: x[2], reverse=True)
+    return candidates
 
 def populate_red_tiles(grid: list, all_nodes: list) -> list:
     print('Populating red tiles...')
@@ -199,16 +210,199 @@ def grid_size(all_nodes: list) -> tuple[int, int]:
 
     return (c_max+1, r_max+1)
 
-def translate_grid(all_nodes: list) -> list:
-    c_min = min(all_nodes, key=lambda x: x[0])[0]
-    r_min = min(all_nodes, key=lambda x: x[1])[1]
+# def translate_grid(all_nodes: list) -> list:
+#     c_min = min(all_nodes, key=lambda x: x[0])[0]
+#     r_min = min(all_nodes, key=lambda x: x[1])[1]
     
-    new_nodes = []
-    for i in range(len(all_nodes)):
-        node = (all_nodes[i][0] - c_min, all_nodes[i][1] - r_min)
-        new_nodes.append(node)
+#     new_nodes = []
+#     for i in range(len(all_nodes)):
+#         node = (all_nodes[i][0] - c_min, all_nodes[i][1] - r_min)
+#         new_nodes.append(node)
 
-    return new_nodes
+#     return new_nodes
+
+def build_grid(rows: int, cols: int, chunk_size: int = 5) -> None:
+    output = r'Day_09\output'
+ 
+    grid = ['.'] * rows
+    for i in range(0, len(grid), chunk_size):
+        ofile = output + '_' + str(i) + '.txt'
+        with open(ofile, 'w') as f:
+            end = i + chunk_size if i + chunk_size < len(grid) else len(grid)
+            for j in range(i, end):
+                f.write('.' * cols)
+                f.write('\n')
+        # grid[i] = ['.'] * cols
+
+    return
+
+def place_grid_red_green_tiles(rows: int, cols: int, all_nodes: list, chunk_size: int = 5) -> None:
+    output = r'Day_09\output'
+    remaining_nodes = list(all_nodes)
+    remaining_nodes = sort_nodes_by_row(remaining_nodes)
+
+    grid = ['.'] * rows
+    for i in range(0, len(grid), chunk_size):
+        ofile = output + '_' + str(i) + '.txt'
+        with open(ofile, 'w') as f:
+            end = i + chunk_size if i + chunk_size < len(grid) else len(grid)
+            for j in range(i, end):
+                remaining_nodes, row_nodes = get_row_nodes(j, remaining_nodes)
+                print(j, remaining_nodes)
+                line = ['.'] * cols
+                min_c = cols + 1
+                max_c = -1
+                for node in row_nodes:
+                    line[node[0]] = K_RED_TILE
+                    min_c = node[0] if min_c > node[0] else min_c
+                    max_c = node[0] if max_c < node[0] else max_c
+
+                for i in range(min_c+1, max_c):
+                    if line[i] == K_OTHER_TILE:
+                        line[i] = K_GREEN_TILE
+
+                line = ''.join(line)
+                f.write(line)
+                f.write('\n')
+    return
+
+def vertical_fill_green_tiles(total_rows: int, all_nodes: list, chunk_size: int = 5) -> None:
+    prefix = r'Day_09\output'    
+    
+    remaining_nodes = list(all_nodes)
+    remaining_nodes = sort_nodes_by_col(all_nodes)
+
+    for i in range(0, total_rows, chunk_size):
+        output_lines = []
+        small_grid = ['.'] * chunk_size
+        working_file = prefix + '_' + str(i) + '.txt'
+        with open(working_file, 'r') as f:
+            lines = f.readlines()
+            for i, line in enumerate(lines):
+                small_grid[i] = list(line)
+
+        
+        cols = len(small_grid[0])
+        for j in range(0, cols):
+            col_nodes, remaining_nodes = get_col_nodes(j, remaining_nodes)
+
+            # sort the col_nodes by row
+            col_nodes = sort_nodes_by_row(col_nodes)
+            print(col_nodes)
+            processed_col_nodes = []
+            
+            for col_node1, col_node2 in zip(col_nodes[:-1], col_nodes[1:]):
+                r1 = col_node1[1]
+                r2 = col_node2[1]
+
+                r1_t = r1 - i * chunk_size
+                r2_t = r2 - i * chunk_size
+                if r1_t < i + chunk_size:
+                    processed_col_nodes.append(col_node1)
+                    if r2_t < i + chunk_size:
+                        # simplest the data is all within the chunk
+                        processed_col_nodes.append(col_node1)
+                        for k in range(r1_t+1, r2_t):
+                            print(k)
+                            if small_grid[j][k] == K_OTHER_TILE:
+                                small_grid[j][k] = K_GREEN_TILE
+                    else:
+                        # r2 overflows
+                        limit = i + chunk_size
+                        for k in range(r1_t+1, limit):
+                            if small_grid[j][k] == K_OTHER_TILE:
+                                small_grid[j][k] = K_GREEN_TILE
+                        # if r2 has flowed over, successors will too.
+                        break
+
+            for processed_node in processed_col_nodes:
+                col_nodes.pop(processed_node)
+
+
+
+
+
+                
+        for line in small_grid:             
+            row = ''.join(line)
+            output_lines.append(row)
+
+            with open(working_file, 'w') as f:
+                f.writelines(output_lines)
+    
+    return
+
+def horizontal_fill_green_tiles(total_rows: int, chunk_size: int = 5) -> None:
+    prefix = r'Day_09\output'
+    for i in range(0, total_rows, chunk_size):
+        output_lines = []
+        working_file = prefix + '_' + str(i) + '.txt'
+        with open(working_file, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                row = list(line)
+                start, end = colored_tile_boundary(row)
+
+                if start >= 0 and end >=0:
+                    for j in range(start, end + 1):
+                        if row[j] == K_OTHER_TILE:
+                            row[j] = K_GREEN_TILE
+
+                row = ''.join(row)
+                output_lines.append(row)
+
+        with open(working_file, 'w') as f:
+            f.writelines(output_lines)
+    
+    return
+
+def get_row_nodes(row: int, remaining_nodes: list) -> tuple[list, list]:
+    # ensure the nodes are sorted.
+    row_nodes = []
+
+    i = 0
+    while len(remaining_nodes) > 0:
+        item_row = remaining_nodes[i][1]
+        if item_row == row:
+            row_nodes.append(remaining_nodes[i])
+            remaining_nodes.pop(i)
+        else:
+            i += 1
+
+        if item_row > row:
+            break        
+
+    return remaining_nodes, row_nodes
+
+def get_col_nodes(col: int, remaining_nodes: list) -> tuple[list, list]:
+    # ensure the nodes are sorted.
+    col_nodes = []
+
+    i = 0
+    while len(remaining_nodes) > 0:
+        item_col = remaining_nodes[i][0]
+        if item_col == col:
+            col_nodes.append(remaining_nodes[i])
+            remaining_nodes.pop(i)
+        else:
+            i += 1
+
+        if item_col > col:
+            break        
+
+    return remaining_nodes, col_nodes
+
+def sort_nodes_by_row(all_nodes: list) -> list:
+    print(all_nodes)
+    all_nodes = sorted(all_nodes, key=lambda x: x[1])
+    print(all_nodes)
+    return all_nodes
+
+def sort_nodes_by_col(all_nodes: list) -> list:
+    print(all_nodes)
+    all_nodes = sorted(all_nodes, key=lambda x: x[0])
+    print(all_nodes)
+    return all_nodes
 
 def main():
     fname = r'Day_09\inputs.txt'
@@ -216,16 +410,28 @@ def main():
 
     all_nodes = load_data_set(data_file=fname)
     # print(all_nodes)    
-    part1_answer(all_nodes=all_nodes)
+    biggest_area = part1_answer(all_nodes=all_nodes)
 
-    # prepare for part 2
+    # prepare for part 2    
+    candidates = big_area_candidates(biggest_area, all_nodes)
+    print(candidates)
+
     # build the grid
-    all_nodes = translate_grid(all_nodes)
     cols, rows = grid_size(all_nodes=all_nodes)
     print(rows, cols)
-    grid = ['.'] * rows
-    for i in range(len(grid)):
-        grid[i] = ['.'] * cols
+
+    # the grid is too large to manipulate in memory
+    # written out to file, it is 9 GB! 
+    chunk_size = 5
+
+    # build_grid(rows, cols, chunk_size)
+    place_grid_red_green_tiles(rows, cols, all_nodes, chunk_size)
+    input('Wait for it...')
+
+    horizontal_fill_green_tiles(rows, chunk_size)
+    vertical_fill_green_tiles(rows, all_nodes, chunk_size)
+
+    exit(0)
 
     grid = populate_red_tiles(grid, all_nodes)
     grid = populate_green_tiles(grid, all_nodes)
@@ -246,6 +452,7 @@ def main():
     # print(flat_sub_grid)
 
     print('Starting solving Part 2...')
+    # grid is too big to build in memory
     part2_answer(grid, all_nodes)
 
 if __name__ == '__main__':
