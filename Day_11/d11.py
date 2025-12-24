@@ -100,6 +100,52 @@ def discover_predecessors(grph: nx.DiGraph, node_name: str, children: list = [],
 
     return exits, results
 
+def get_all_nth_generation_successors(grph: nx.DiGraph, node_name: str, terminal_node: str, depth: int = 0, max_depth: int = 2, results: set = set(), all_children: set = set()) -> tuple[int, list]:
+    successors = list(grph.successors(node_name))
+    
+    # if the terminal node(s) is/area encountered, all other successors at the same level are to be disregarded
+    if terminal_node in successors:
+        print(f'{terminal_node} node encountered. Other peer nodes are: {successors}')
+        all_children.add(terminal_node)
+        # results.add(terminal_node)
+        results = set()
+        results.add(terminal_node)
+    else:
+        all_children.update(successors)
+        depth += 1
+        print(depth, successors)
+
+        if depth >= max_depth:
+            results.update(successors)
+        else:
+            for successor in successors:
+                _, results, all_children = get_all_nth_generation_successors(grph, successor, terminal_node, depth, max_depth, results, all_children)
+
+    return max_depth, results, all_children
+
+def get_all_nth_generation_predecessors(grph: nx.DiGraph, node_name: str, terminal_node: str, depth: int = 0, max_depth: int = 2, results: set = set(), all_parents: set = set()) -> tuple[int, list]:
+    predecessors = list(grph.predecessors(node_name))
+    
+    # if the terminal node is encountered, all other successors at the same level are to be disregarded
+    if terminal_node in predecessors:
+        print(f'{terminal_node} node encountered. Other peer nodes are: {predecessors}')
+        all_parents.add(terminal_node)
+        # results.add(terminal_node)
+        results = set()
+        results.add(terminal_node)
+    else:
+        all_parents.update(predecessors)
+        depth += 1
+        print(depth, predecessors)
+
+        if depth >= max_depth:
+            results.update(predecessors)
+        else:
+            for predecessor in predecessors:
+                _, results, all_parents = get_all_nth_generation_predecessors(grph, predecessor, terminal_node, depth, max_depth, results, all_parents)
+
+    return max_depth, results, all_parents
+
 def list_extraneous_terminal_nodes(grph: nx.DiGraph, target_terminal_node: str = K_END_NODE) -> tuple[int, list]:
     extraneous_node_count = 0
     extraneous_terminal_nodes = []
@@ -156,7 +202,6 @@ def remap_pass_through_node(grph: nx.DiGraph, node_name: str):
 
 def part1_solution(fname: str, start_node: str = K_START_NODE, end_node: str = K_END_NODE):
     all_edges = load_data_set(data_file=fname)
-    # print(all_edges)    
 
     g = nx.DiGraph(name='reactor')
     g.add_edges_from(all_edges)
@@ -171,6 +216,14 @@ def part1_solution(fname: str, start_node: str = K_START_NODE, end_node: str = K
     print('########### End part 1 ###########')
     
     return
+
+def get_target_node_immediate_predecessors(grph: nx.DiGraph, target_node: str) -> list:
+    predecessors = list(grph.predecessors(target_node))
+    return predecessors
+
+def get_target_node_immediate_successors(grph: nx.DiGraph, target_node: str) -> list:
+    successors = list(grph.successors(target_node))
+    return successors
 
 # Three parts to this:
 # we know there is no dac between svr and fft
@@ -189,26 +242,223 @@ def part2_solution(fname: str):
     g2 = nx.DiGraph(name='reactor2')
     g2.add_edges_from(all_edges)
 
+    path_map = nx.DiGraph(name='solution')
+
+    # must visit nodes
+    start_node = K_START_NODE
     fft_node = 'fft'
     dac_node = 'dac'
+    end_node = K_END_NODE
+
+    must_visit_nodes = [start_node, fft_node, dac_node, end_node]
+    path_map.add_nodes_from(must_visit_nodes)
+
+    dac_predecessors = get_target_node_immediate_predecessors(g2, dac_node)
+    for pred in dac_predecessors:
+        path_map.add_edge(pred, dac_node, **{'count': 1})
+
+    # known edges and counts
+    # svr fft edge and dac out edge
+    path_map.add_edge(start_node, fft_node, **{'count': 2588})
+    path_map.add_edge(dac_node, end_node, **{'count': 10289})
+
+    pos = nx.spring_layout(path_map)
+    edge_labels = nx.get_edge_attributes(path_map, 'count')
+
+    # draws the nodes
+    nx.draw_networkx(path_map, pos=pos, with_labels=True)
+
+    # draw edge labels
+    nx.draw_networkx_edge_labels(path_map, pos, edge_labels=edge_labels, font_color='green')
+    plt.show()
+
+    # now build the nodes between fft and dac predecessors with counts
+    # start from fft node. loop through and get routes to the third generation, until all dac_predecessors have been reach.
+    start_nodes = [fft_node]
+    terminal_nodes = [dac_node] #dac_predecessors
+    max_depth = 2
+    
+    max_iter = 4
+    iter = 0
+    done = False
+    while iter < max_iter:
+        next_start_nodes = set()
+        for start_node in start_nodes:
+            depth = 0
+            results = set()
+            all_children = set()
+            depth, results, all_parents = get_all_nth_generation_successors(g2, start_node, dac_node, depth, max_depth, results=results, all_children=all_children)
+            print(depth, results, all_children)
+            
+            # get the subgraph
+            selected_nodes = list(all_children)
+            selected_nodes.append(start_node)
+
+            subgraph = g2.subgraph(selected_nodes)
+            for selected_node in results:
+                count = sum(1 for path in nx.all_simple_paths(subgraph, start_node, selected_node))
+                path_map.add_edge(start_node, selected_node, **{'count': count})
+                print(f'Paths from {start_node} to {selected_node}: {count}')
+
+        # check that the desired terminal node is in the path
+        # flag ready to exit the while loop
+        for terminal_node in terminal_nodes:
+            if terminal_node in all_children:
+                break
+                #print(f'Done too deep. Need to back-up')
+
+        next_start_nodes.update(results)
+
+        start_nodes = list(next_start_nodes)
+        iter += 1
+
+    all_routes = 0
+    # all this work. path_map is ready. list the paths
+    for path in nx.all_simple_paths(path_map, fft_node, dac_node):
+        print(path)
+        this_route = 1
+        for node1, node2 in zip(path[:-1], path[1:]):
+            count = path_map.get_edge_data(node1, node2)['count']
+            this_route = this_route * count
+            print(f'{path} node pair {node1}:{node2} ways: {count}')
+        
+        print(f'{path} ways: {this_route}')
+        all_routes += this_route
+
+    print(f'All the ways from {fft_node} to {dac_node}: {all_routes}')
+
+    n1 = all_routes
+    n2 = path_map.get_edge_data(K_START_NODE, fft_node)['count']
+    n3 = path_map.get_edge_data(dac_node, K_END_NODE)['count']
+
+    part2_answer = n1 * n2 * n3
+    print(f'{n1} {n2} {n3}')
+    print(f'Part 2 answer: {part2_answer}')
+    
+    # # plot it
+    # pos = nx.spring_layout(path_map)
+    # edge_labels = nx.get_edge_attributes(path_map, 'count')
+
+    # # draws the nodes
+    # nx.draw_networkx(path_map, pos=pos, with_labels=True)
+
+    # # draw edge labels
+    # nx.draw_networkx_edge_labels(path_map, pos, edge_labels=edge_labels, font_color='green')
+    # plt.show()
+
+
+    exit(0)
+    # build a sub graph of n generations from svr to fft
+    # 6 generations has no paths to fft
+    # 7 generations gave 2588 paths from svr to fft
+    # 8 generations gave 2588 paths from svr to fft
+    # 10 generations gave...2588 but took much longer
+    flag = False
+
+    if flag:
+        start_node = 'svr'
+        terminal_node = 'fft'
+        depth = 0
+        max_depth = 2
+        results = set()
+        all_children = set()
+        depth, results, all_children = get_all_nth_generation_successors(g2, start_node, terminal_node, depth, max_depth, results=results, all_children=all_children)
+        print(depth, results, all_children)
+
+        all_children.add(start_node)
+        sub_grph = g2.subgraph(all_children)
+
+        # nx.draw_networkx(sub_grph, with_labels=True, edge_color='green')
+        # plt.show()
+
+        # we have found the end node
+        if terminal_node in results:
+            count = sum(1 for path in nx.all_simple_paths(sub_grph, start_node, terminal_node))
+            print(f'Paths from {start_node} to {terminal_node}: {count}')
+        else:
+            path_map = {}
+            path_map[start_node] = {}
+            for node in results:
+                count = sum(1 for path in nx.all_simple_paths(sub_grph, start_node, node))
+                print(f'Paths from {start_node} to {node}: {count}')
+                path_map[start_node][node] = {'paths': count}
+
+            print(path_map)
+
+    # build a sub graph of n generations from fft to dac
+    # 6 generations has no paths to dac
+    # 7 generations gave xxx paths from fft to dac
+    start_node = 'fft'
+    terminal_node = 'dac'
+    depth = 0
+    max_depth = 3
+    results = set()
+    all_children = set()
+    depth, results, all_children = get_all_nth_generation_successors(g2, start_node, terminal_node, depth, max_depth, results=results, all_children=all_children)
+    print(depth, results, all_children)
+
+    all_children.add(start_node)
+    sub_grph = g2.subgraph(all_children)
+
+    # nx.draw_networkx(sub_grph, with_labels=True, edge_color='green')
+    # plt.show()
+
+    # we have found the end node
+    if terminal_node in results:
+        count = sum(1 for path in nx.all_simple_paths(sub_grph, start_node, terminal_node))
+        print(f'Paths from {start_node} to {terminal_node}: {count}')
+    else:
+        path_map = {}
+        path_map[start_node] = {}
+        for node in results:
+            count = sum(1 for path in nx.all_simple_paths(sub_grph, start_node, node))
+            print(f'Paths from {start_node} to {node}: {count}')
+            path_map[start_node][node] = {'paths': count}
+
+        print(path_map)
+
+    exit(0)
+    for k in path_map[fft_node].keys():
+        depth = 0
+        max_depth = 3
+        results = set()
+        all_children = set()
+        depth, results, all_children = get_all_nth_generation_successors(g2, k, dac_node, depth, max_depth, results=results, all_children=all_children)
+        print(depth, results, all_children)
+
+        all_children.add(k)
+        sub_grph = g2.subgraph(all_children)
+
+        # path_map[fft_node][k] = {}
+        for node in results:
+            count = sum(1 for path in nx.all_simple_paths(sub_grph, k, node))
+            print(f'Paths from {k} to {node}: {count}')
+            path_map[fft_node][k][node] = {'paths': count}
+
+    print(path_map)
+    return
     # Python generators can only be iterated through once.
     # all_simple_paths returns a Generator
     # since the generator will take a long time, do it only once.
+
     start_time = datetime.now().isoformat(timespec='seconds')
-    print(f'{start_time} Starting generating all paths from {K_START_NODE} to {fft_node}')
-    n1 = sum(1 for path in nx.all_simple_paths(g2, K_START_NODE, fft_node))
-    print(f'All paths from {K_START_NODE} to {fft_node}: {n1}')
+    print(f'{start_time} Starting generating all paths from {dac_node} to {K_END_NODE}')
+    n3 = sum(1 for path in nx.all_simple_paths(g2, dac_node, K_END_NODE))
+    print(f'All paths from {dac_node} to {K_END_NODE}: {n3}')
+
+    start_time = datetime.now().isoformat(timespec='seconds')    
+    # going from svr to fft will include paths that go throughout the graph
+    # that was running for more than 20 hours without returning.
+    # the reverse fft to svr will be a small set
+    print(f'{start_time} Starting generating all paths from {fft_node} to {K_START_NODE}')
+    n1 = sum(1 for path in nx.all_simple_paths(g2, fft_node, K_START_NODE))
+    print(f'All paths from {fft_node} to {K_START_NODE}: {n1}')
 
     start_time = datetime.now().isoformat(timespec='seconds')
     print(f'{start_time} Starting generating all paths from {fft_node} to {dac_node}')
     n2 = sum(1 for path in nx.all_simple_paths(g2, fft_node, dac_node))
     print(f'All paths from {fft_node} to {dac_node}: {n2}')
     
-    start_time = datetime.now().isoformat(timespec='seconds')
-    print(f'{start_time} Starting generating all paths from {dac_node} to {K_END_NODE}')
-    n3 = sum(1 for path in nx.all_simple_paths(g2, dac_node, K_END_NODE))
-    print(f'All paths from {dac_node} to {K_END_NODE}: {n3}')
-
     time1 = datetime.now().isoformat(timespec='seconds')
     print(f'Done generating all paths: {time1}')
 
@@ -257,7 +507,7 @@ def main():
     start_node = 'fft'
     end_node = 'dac'
     fname = r'Day_11\inputs.txt'
-    # fname = r'Day_11\sample_inputs_part2.txt'
+    fname = r'Day_11\sample_inputs_part2.txt'
     part2_solution(fname)
 
     exit(0)

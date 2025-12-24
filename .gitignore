@@ -207,3 +207,6 @@ marimo/_lsp/
 __marimo__/
 temp.py
 junction_box.py
+
+# Other project stuff
+**/*.txt
