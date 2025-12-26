@@ -335,6 +335,11 @@ def part2_solution(fname: str):
     print(f'{n1} {n2} {n3}')
     print(f'Part 2 answer: {part2_answer}')
     
+    # this number was too small
+    # All the ways from fft to dac: 2185149
+    # 2185149 2588 10289
+    # Part 2 answer: 58185998981868
+
     # # plot it
     # pos = nx.spring_layout(path_map)
     # edge_labels = nx.get_edge_attributes(path_map, 'count')
@@ -494,6 +499,45 @@ def part2_solution(fname: str):
 
     return
 
+def part2_solution_b(fname: str):
+    # build the base graph
+    all_edges = load_data_set(data_file=fname)
+    g2 = nx.DiGraph(name='reactor2')
+    g2.add_edges_from(all_edges)
+
+    fft_node = 'fft'
+    dac_node = 'dac'
+
+    all_paths = sum(1 for path in nx.all_simple_paths(g2, fft_node, dac_node))
+    print(f'All paths from {fft_node} to {dac_node}: {all_paths}')
+
+    # get dac predecessors
+    dac_predecessors = get_target_node_immediate_predecessors(g2, dac_node)
+
+    removal = []
+    for predecessor in dac_predecessors:
+        removal.append((predecessor, dac_node))
+
+    print(f'Removing edges: {removal}')
+    g2.remove_edges_from(removal)
+
+    start_time = datetime.now()
+    all_paths = 0   
+    for predecessor in dac_predecessors:
+        path_count = 0
+        for path in nx.all_simple_paths(g2, fft_node, predecessor ):
+            path_count += 1
+            current_time = datetime.now()
+            duration_min = (current_time - start_time).total_seconds()/60
+            print(f'Elapsed time: {duration_min} min:: {path_count}: {path}')
+
+        print(f'Elapsed time: {duration_min} min:: From {fft_node} to {predecessor}: Paths are {path_count}')
+        all_paths = all_paths * path_count if path_count > 0 else all_paths
+
+    current_time = datetime.now()
+    duration_min = (current_time - start_time).total_seconds()/60
+    print(f'Elapsed time: {duration_min} min:: From {fft_node} to {dac_node}: Paths are {all_paths}')
+
 def main():
     # # Part 1
     execute_part_1 = False
@@ -507,79 +551,16 @@ def main():
     start_node = 'fft'
     end_node = 'dac'
     fname = r'Day_11\inputs.txt'
-    fname = r'Day_11\sample_inputs_part2.txt'
-    part2_solution(fname)
+    # fname = r'Day_11\sample_inputs_part2.txt'
+    fname = r'Day_11\test_case.txt'
+    part2_solution_b(fname)
 
-    exit(0)
     # starting from srv to out is just too many routes to traverse end to end
     # break it up
     # from trial error, 
     # svr to fft is 2588 paths (with no dac inbetween)
-    # dac to out is 19,289 paths (with no fft inbetween)
+    # dac to out is 10,289 paths (with no fft inbetween)
 
-    # start at 'dac' and find all paths to the end.
-    start_node = 'dac'
-    end_node = K_END_NODE
-    print(f'SUCCESSORS from {start_node}')
-    # weird. If results = [] is not passed, the results from previous run (above) are included.
-    all_exits, successors_paths = discover_successors(g2, start_node, results=[], end_node=end_node)
-
-    all_exits_with_target = 0
-    target_node = 'fft'
-    for item in successors_paths:
-        if target_node in item:
-            all_exits_with_target += 1
-
-    print(f'Candidates from {start_node} to {K_END_NODE}: {all_exits}')
-    print(f'Candidates from {start_node} to {K_END_NODE} with target {target_node}: {all_exits_with_target}')
-
-    input('Waiting...')
-
-    start_node = 'fft'
-    end_node = 'dac'
-    print(f'SUCCESSORS from {start_node}')
-    # weird. If results = [] is not passed, the results from previous run (above) are included.
-    all_exits, successors_paths = discover_successors(g2, start_node, results=[], end_node=end_node)
-
-    print(f'Candidates from {start_node} to {end_node}: {all_exits}')
-
-    input('Waiting...')
-
-    print('PREDECESSORS')
-    origin_node = 'svr'
-    start_node = 'fft'
-    target_node = 'dac'
-    results = []
-    all_entrances, origin_paths = discover_predecessors(g2, start_node, results=[], start_node=origin_node)
-
-    all_entrances_with_target_node = 0
-    for item in origin_paths:
-        item.remove(start_node)
-        if target_node in item:
-            all_entrances_with_target_node += 1
-
-    print(f'Candidates from {start_node} to {K_START_NODE}: {all_entrances}')
-    print(f'Candidates from {start_node} to {K_START_NODE} with target {target_node}: {all_entrances_with_target_node}')
-
-    input('Waiting...')
-    # for item in origin_paths:
-    #     print(item)
-
-    # build all combinations of orign and successor paths
-    print('Building combinations')
-    candidate_count = 0
-    total_count = 0
-    
-    for origin, successor in itertools.product(origin_paths, successors_paths):
-        candidate = list(origin)
-        candidate.extend(successor)
-        # print(candidate)
-        total_count += 1
-        if target_node in candidate:
-            candidate_count += 1
-
-    print(f'Number of paths from {K_START_NODE} to {K_END_NODE} containing {start_node}: {total_count}')    
-    print(f'Number of paths from {K_START_NODE} to {K_END_NODE} containing {start_node} and {target_node}: {candidate_count}')
 
 if __name__ == '__main__':
     main()
