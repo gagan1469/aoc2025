@@ -2,6 +2,7 @@ import networkx as nx
 import itertools
 import matplotlib.pyplot as plt
 from datetime import datetime
+from math import prod
 
 K_END_NODE = 'out'
 K_START_NODE = 'svr' 
@@ -18,187 +19,8 @@ def load_data_set(data_file: str, delimiter: str = '\n') -> list:
         children = items[1].strip().split()
         for child in children:
             all_edges.append((parent, child))
-        # node = (parent, children)
-        # all_nodes.append(node)        
 
     return all_edges
-
-# detect circular dependence and remove that edge
-def discover_successors(grph: nx.DiGraph, node_name: str, parents: list = [], exits: int = 0, results: list = [], end_node: str = K_END_NODE) -> tuple[int, list]:
-    successors = list(grph.successors(node_name))
-    local_parents = list(parents)
-    
-    if node_name not in local_parents:
-        local_parents.append(node_name)
-    else:
-        # circular dependence
-        print(f'HOW DID WE GET HERE: Loop back alert: Node {node_name} already exists in parents list {local_parents}.')
-    
-    # print(local_parents)
-
-    for successor in successors:
-        if successor in local_parents:
-        # circular dependence
-            print(f'Loop back alert: Node {successor} already exists in parents list {local_parents}.')
-            print(f'Breaking connection between node {node_name} and node {successor}')
-            grph.remove_edge(node_name, successor)
-
-    # refresh successor list with circular dependencies removed
-    successors = list(grph.successors(node_name))
-    for successor in successors:
-        if successor == end_node:
-            exits += 1
-            result = list(local_parents)
-            result.append(successor)
-            # print(exits, result)
-            if result in results:
-                print(f'Path already exists: {result}')
-                input('Something is up!')
-
-            results.append(result)
-        else:
-            exits, results = discover_successors(grph, successor, local_parents, exits, results, end_node)
-
-    return exits, results
-
-# detect circular dependence and remove that edge
-def discover_predecessors(grph: nx.DiGraph, node_name: str, children: list = [], exits: int = 0, results: list = [], start_node: str = K_START_NODE) -> tuple[int, list]:
-    predecessors = list(grph.predecessors(node_name))
-    local_children = list(children)
-
-    if node_name not in local_children:
-        local_children.append(node_name)
-    else:
-        # circular dependence
-        print(f'HOW DID WE GET HERE: Loop back alert: Node {node_name} already exists in childrens list {local_children}.')
-    
-    # print(local_parents)
-
-    for predecessor in predecessors:
-        if predecessor in local_children:
-        # circular dependence
-            print(f'Loop back alert: Node {predecessor} already exists in parents list {local_children}.')
-            print(f'Breaking connection between child node {node_name} and parent node {predecessor}')
-            grph.remove_edge(predecessor, node_name)
-
-    # refresh successor list with circular dependencies removed
-    predecessors = list(grph.predecessors(node_name))
-    for predecessor in predecessors:
-        if predecessor == start_node:
-            exits += 1
-            result = list(local_children)
-            result.append(predecessor)
-            result.reverse()
-            print(exits, result)
-            if result in results:
-                print(f'Path already exists: {result}')
-                input('Something is up!')
-
-            results.append(result)
-        else:
-            exits, results = discover_predecessors(grph, predecessor, local_children, exits, results, start_node)
-
-    return exits, results
-
-def get_all_nth_generation_successors(grph: nx.DiGraph, node_name: str, terminal_node: str, depth: int = 0, max_depth: int = 2, results: set = set(), all_children: set = set()) -> tuple[int, list]:
-    successors = list(grph.successors(node_name))
-    
-    # if the terminal node(s) is/area encountered, all other successors at the same level are to be disregarded
-    if terminal_node in successors:
-        print(f'{terminal_node} node encountered. Other peer nodes are: {successors}')
-        all_children.add(terminal_node)
-        # results.add(terminal_node)
-        results = set()
-        results.add(terminal_node)
-    else:
-        all_children.update(successors)
-        depth += 1
-        print(depth, successors)
-
-        if depth >= max_depth:
-            results.update(successors)
-        else:
-            for successor in successors:
-                _, results, all_children = get_all_nth_generation_successors(grph, successor, terminal_node, depth, max_depth, results, all_children)
-
-    return max_depth, results, all_children
-
-def get_all_nth_generation_predecessors(grph: nx.DiGraph, node_name: str, terminal_node: str, depth: int = 0, max_depth: int = 2, results: set = set(), all_parents: set = set()) -> tuple[int, list]:
-    predecessors = list(grph.predecessors(node_name))
-    
-    # if the terminal node is encountered, all other successors at the same level are to be disregarded
-    if terminal_node in predecessors:
-        print(f'{terminal_node} node encountered. Other peer nodes are: {predecessors}')
-        all_parents.add(terminal_node)
-        # results.add(terminal_node)
-        results = set()
-        results.add(terminal_node)
-    else:
-        all_parents.update(predecessors)
-        depth += 1
-        print(depth, predecessors)
-
-        if depth >= max_depth:
-            results.update(predecessors)
-        else:
-            for predecessor in predecessors:
-                _, results, all_parents = get_all_nth_generation_predecessors(grph, predecessor, terminal_node, depth, max_depth, results, all_parents)
-
-    return max_depth, results, all_parents
-
-def list_extraneous_terminal_nodes(grph: nx.DiGraph, target_terminal_node: str = K_END_NODE) -> tuple[int, list]:
-    extraneous_node_count = 0
-    extraneous_terminal_nodes = []
-    for node_name in grph.nodes:
-        successors = list(grph.successors(node_name))
-        successor_count = len(successors)
-
-        if successor_count == 0 and node_name != target_terminal_node:
-            extraneous_terminal_nodes.append(node_name)
-            extraneous_node_count += 1 
-
-    return extraneous_node_count, extraneous_terminal_nodes
-
-# a node that has exactly one successor and its sole predecessor has exactly one successor (this node)
-def list_pass_through_nodes(grph: nx.DiGraph, target_terminal_node: str = K_END_NODE) -> tuple[int, list]:
-    pass_through_node_count = 0
-    pass_through_nodes = []
-    for node_name in grph.nodes:
-        successors = list(grph.successors(node_name))
-        successor_count = len(successors)
-        
-        predecessors = list(grph.predecessors(node_name))
-        predecessor_count = len(predecessors)
-        if successor_count == 1 and predecessor_count == 1:
-            parent_node = predecessors[0]
-            parent_node_children_count = len(list(grph.successors(parent_node)))
-            if parent_node_children_count == 1:
-                pass_through_nodes.append(node_name)
-                pass_through_node_count += 1
-
-    return pass_through_node_count, pass_through_nodes
-
-def remap_pass_through_node(grph: nx.DiGraph, node_name: str):
-    # there should be only one successor but check
-    successors = list(grph.successors(node_name))
-
-    # there should be at least on predecessor
-    predecessors = list(grph.predecessors(node_name))
-
-    if len(successors) == 1 and len(predecessors) == 1:
-        grph.remove_edge(node_name, successors[0])
-
-        for predecessor in predecessors:
-            # disconnect predecessor from node
-            grph.remove_edge(predecessor, node_name)
-
-            # connect predecessor to successor
-            grph.add_edge(predecessor, successors[0])
-
-        # drop the node
-        # grph.remove_node(node_name)
-
-    return
 
 def part1_solution(fname: str, start_node: str = K_START_NODE, end_node: str = K_END_NODE):
     all_edges = load_data_set(data_file=fname)
@@ -217,330 +39,45 @@ def part1_solution(fname: str, start_node: str = K_START_NODE, end_node: str = K
     
     return
 
-def get_target_node_immediate_predecessors(grph: nx.DiGraph, target_node: str) -> list:
-    predecessors = list(grph.predecessors(target_node))
-    return predecessors
-
-def get_target_node_immediate_successors(grph: nx.DiGraph, target_node: str) -> list:
-    successors = list(grph.successors(target_node))
-    return successors
-
-# Three parts to this:
-# we know there is no dac between svr and fft
-# we know there is no fft between dac and out
-# we know there is only one terminal node out
-# all paths are connected from svr to out
-# therefore the solution is:
-# n1 * n2 * n3
-# where 
-# n1 paths from svr to fft, 
-# n2 paths from fft to dac, 
-# n3 paths from dac to out
-def part2_solution(fname: str):
-    all_edges = load_data_set(data_file=fname)
-
-    g2 = nx.DiGraph(name='reactor2')
-    g2.add_edges_from(all_edges)
-
-    path_map = nx.DiGraph(name='solution')
-
-    # must visit nodes
-    start_node = K_START_NODE
-    fft_node = 'fft'
-    dac_node = 'dac'
-    end_node = K_END_NODE
-
-    must_visit_nodes = [start_node, fft_node, dac_node, end_node]
-    path_map.add_nodes_from(must_visit_nodes)
-
-    dac_predecessors = get_target_node_immediate_predecessors(g2, dac_node)
-    for pred in dac_predecessors:
-        path_map.add_edge(pred, dac_node, **{'count': 1})
-
-    # known edges and counts
-    # svr fft edge and dac out edge
-    path_map.add_edge(start_node, fft_node, **{'count': 2588})
-    path_map.add_edge(dac_node, end_node, **{'count': 10289})
-
-    pos = nx.spring_layout(path_map)
-    edge_labels = nx.get_edge_attributes(path_map, 'count')
-
-    # draws the nodes
-    nx.draw_networkx(path_map, pos=pos, with_labels=True)
-
-    # draw edge labels
-    nx.draw_networkx_edge_labels(path_map, pos, edge_labels=edge_labels, font_color='green')
-    plt.show()
-
-    # now build the nodes between fft and dac predecessors with counts
-    # start from fft node. loop through and get routes to the third generation, until all dac_predecessors have been reach.
-    start_nodes = [fft_node]
-    terminal_nodes = [dac_node] #dac_predecessors
-    max_depth = 2
-    
-    max_iter = 4
-    iter = 0
-    done = False
-    while iter < max_iter:
-        next_start_nodes = set()
-        for start_node in start_nodes:
-            depth = 0
-            results = set()
-            all_children = set()
-            depth, results, all_parents = get_all_nth_generation_successors(g2, start_node, dac_node, depth, max_depth, results=results, all_children=all_children)
-            print(depth, results, all_children)
-            
-            # get the subgraph
-            selected_nodes = list(all_children)
-            selected_nodes.append(start_node)
-
-            subgraph = g2.subgraph(selected_nodes)
-            for selected_node in results:
-                count = sum(1 for path in nx.all_simple_paths(subgraph, start_node, selected_node))
-                path_map.add_edge(start_node, selected_node, **{'count': count})
-                print(f'Paths from {start_node} to {selected_node}: {count}')
-
-        # check that the desired terminal node is in the path
-        # flag ready to exit the while loop
-        for terminal_node in terminal_nodes:
-            if terminal_node in all_children:
-                break
-                #print(f'Done too deep. Need to back-up')
-
-        next_start_nodes.update(results)
-
-        start_nodes = list(next_start_nodes)
-        iter += 1
-
-    all_routes = 0
-    # all this work. path_map is ready. list the paths
-    for path in nx.all_simple_paths(path_map, fft_node, dac_node):
-        print(path)
-        this_route = 1
-        for node1, node2 in zip(path[:-1], path[1:]):
-            count = path_map.get_edge_data(node1, node2)['count']
-            this_route = this_route * count
-            print(f'{path} node pair {node1}:{node2} ways: {count}')
-        
-        print(f'{path} ways: {this_route}')
-        all_routes += this_route
-
-    print(f'All the ways from {fft_node} to {dac_node}: {all_routes}')
-
-    n1 = all_routes
-    n2 = path_map.get_edge_data(K_START_NODE, fft_node)['count']
-    n3 = path_map.get_edge_data(dac_node, K_END_NODE)['count']
-
-    part2_answer = n1 * n2 * n3
-    print(f'{n1} {n2} {n3}')
-    print(f'Part 2 answer: {part2_answer}')
-    
-    # this number was too small
-    # All the ways from fft to dac: 2185149
-    # 2185149 2588 10289
-    # Part 2 answer: 58185998981868
-
-    # # plot it
-    # pos = nx.spring_layout(path_map)
-    # edge_labels = nx.get_edge_attributes(path_map, 'count')
-
-    # # draws the nodes
-    # nx.draw_networkx(path_map, pos=pos, with_labels=True)
-
-    # # draw edge labels
-    # nx.draw_networkx_edge_labels(path_map, pos, edge_labels=edge_labels, font_color='green')
-    # plt.show()
-
-
-    exit(0)
-    # build a sub graph of n generations from svr to fft
-    # 6 generations has no paths to fft
-    # 7 generations gave 2588 paths from svr to fft
-    # 8 generations gave 2588 paths from svr to fft
-    # 10 generations gave...2588 but took much longer
-    flag = False
-
-    if flag:
-        start_node = 'svr'
-        terminal_node = 'fft'
-        depth = 0
-        max_depth = 2
-        results = set()
-        all_children = set()
-        depth, results, all_children = get_all_nth_generation_successors(g2, start_node, terminal_node, depth, max_depth, results=results, all_children=all_children)
-        print(depth, results, all_children)
-
-        all_children.add(start_node)
-        sub_grph = g2.subgraph(all_children)
-
-        # nx.draw_networkx(sub_grph, with_labels=True, edge_color='green')
-        # plt.show()
-
-        # we have found the end node
-        if terminal_node in results:
-            count = sum(1 for path in nx.all_simple_paths(sub_grph, start_node, terminal_node))
-            print(f'Paths from {start_node} to {terminal_node}: {count}')
-        else:
-            path_map = {}
-            path_map[start_node] = {}
-            for node in results:
-                count = sum(1 for path in nx.all_simple_paths(sub_grph, start_node, node))
-                print(f'Paths from {start_node} to {node}: {count}')
-                path_map[start_node][node] = {'paths': count}
-
-            print(path_map)
-
-    # build a sub graph of n generations from fft to dac
-    # 6 generations has no paths to dac
-    # 7 generations gave xxx paths from fft to dac
-    start_node = 'fft'
-    terminal_node = 'dac'
-    depth = 0
-    max_depth = 3
-    results = set()
-    all_children = set()
-    depth, results, all_children = get_all_nth_generation_successors(g2, start_node, terminal_node, depth, max_depth, results=results, all_children=all_children)
-    print(depth, results, all_children)
-
-    all_children.add(start_node)
-    sub_grph = g2.subgraph(all_children)
-
-    # nx.draw_networkx(sub_grph, with_labels=True, edge_color='green')
-    # plt.show()
-
-    # we have found the end node
-    if terminal_node in results:
-        count = sum(1 for path in nx.all_simple_paths(sub_grph, start_node, terminal_node))
-        print(f'Paths from {start_node} to {terminal_node}: {count}')
-    else:
-        path_map = {}
-        path_map[start_node] = {}
-        for node in results:
-            count = sum(1 for path in nx.all_simple_paths(sub_grph, start_node, node))
-            print(f'Paths from {start_node} to {node}: {count}')
-            path_map[start_node][node] = {'paths': count}
-
-        print(path_map)
-
-    exit(0)
-    for k in path_map[fft_node].keys():
-        depth = 0
-        max_depth = 3
-        results = set()
-        all_children = set()
-        depth, results, all_children = get_all_nth_generation_successors(g2, k, dac_node, depth, max_depth, results=results, all_children=all_children)
-        print(depth, results, all_children)
-
-        all_children.add(k)
-        sub_grph = g2.subgraph(all_children)
-
-        # path_map[fft_node][k] = {}
-        for node in results:
-            count = sum(1 for path in nx.all_simple_paths(sub_grph, k, node))
-            print(f'Paths from {k} to {node}: {count}')
-            path_map[fft_node][k][node] = {'paths': count}
-
-    print(path_map)
-    return
-    # Python generators can only be iterated through once.
-    # all_simple_paths returns a Generator
-    # since the generator will take a long time, do it only once.
-
-    start_time = datetime.now().isoformat(timespec='seconds')
-    print(f'{start_time} Starting generating all paths from {dac_node} to {K_END_NODE}')
-    n3 = sum(1 for path in nx.all_simple_paths(g2, dac_node, K_END_NODE))
-    print(f'All paths from {dac_node} to {K_END_NODE}: {n3}')
-
-    start_time = datetime.now().isoformat(timespec='seconds')    
-    # going from svr to fft will include paths that go throughout the graph
-    # that was running for more than 20 hours without returning.
-    # the reverse fft to svr will be a small set
-    print(f'{start_time} Starting generating all paths from {fft_node} to {K_START_NODE}')
-    n1 = sum(1 for path in nx.all_simple_paths(g2, fft_node, K_START_NODE))
-    print(f'All paths from {fft_node} to {K_START_NODE}: {n1}')
-
-    start_time = datetime.now().isoformat(timespec='seconds')
-    print(f'{start_time} Starting generating all paths from {fft_node} to {dac_node}')
-    n2 = sum(1 for path in nx.all_simple_paths(g2, fft_node, dac_node))
-    print(f'All paths from {fft_node} to {dac_node}: {n2}')
-    
-    time1 = datetime.now().isoformat(timespec='seconds')
-    print(f'Done generating all paths: {time1}')
-
-    all_paths_count = n1 * n2 * n3
-    
-    print(f'There are {all_paths_count} paths from {K_START_NODE} to {K_END_NODE} passing through {fft_node} and {dac_node}')
-    
-    # # count nodes with no successors
-    # extraneous_terminal_nodes = []
-    # pass_through_nodes = []
-    # count, extraneous_terminal_nodes = list_extraneous_terminal_nodes(g2)
-    # print(count, extraneous_terminal_nodes)
-    
-    # count, pass_through_nodes = list_pass_through_nodes(g2)
-    # print(count, pass_through_nodes)
-
-    # # nx.draw(g2, with_labels=True)
-    # # plt.show()
-
-    # # remap pass through nodes and simplify the map
-    # for node_name in pass_through_nodes:
-    #     remap_pass_through_node(g2, node_name)
-
-    # count, pass_through_nodes = list_pass_through_nodes(g2)
-    # print(count, pass_through_nodes)
-    
-    # # nx.draw(g2, with_labels=True)
-    # # plt.show()
-
-    # exits, results = discover_successors(g2, start_node)
-
-    # print(f'There are {exits} paths from {start_node} to {end_node}')
-
-    return
-
-def part2_solution_b(fname: str):
+# Counting paths between a source node \(S\) and a destination node \(D\) 
+# in a Directed Acyclic Graph (DAG) is a classic dynamic programming problem. 
+# The key is to process the nodes in a topological order. 
+def part2_solution(fname: str, start_node: str, end_node: str) -> int:
     # build the base graph
     all_edges = load_data_set(data_file=fname)
     g2 = nx.DiGraph(name='reactor2')
     g2.add_edges_from(all_edges)
 
-    fft_node = 'fft'
-    dac_node = 'dac'
+    # Python generators can only be iterated through once.
+    # topological_sort returns a Generator
+    sorted = list(nx.topological_sort(g2))
+    # print(sorted)
 
-    all_paths = sum(1 for path in nx.all_simple_paths(g2, fft_node, dac_node))
-    print(f'All paths from {fft_node} to {dac_node}: {all_paths}')
+    start = sorted.index(start_node)
+    end = sorted.index(end_node)
 
-    # get dac predecessors
-    dac_predecessors = get_target_node_immediate_predecessors(g2, dac_node)
+    target = list(sorted[start: end + 1])
+    # print(target)
+    counts = [0] * len(target)
+    counts[0] = 1
 
-    removal = []
-    for predecessor in dac_predecessors:
-        removal.append((predecessor, dac_node))
+    for i, t in enumerate(target):
+        successors = list(g2.successors(t))
+        # print(f'{i}: {t} successors {successors}')
+        for s in successors:
+            try:
+                idx = target.index(s)
+                counts[idx] = counts[idx] + counts[i]
+                # print(counts)
+            except ValueError as e:
+                print(f'{i}: {t} successor {s} is not in sublist')
 
-    print(f'Removing edges: {removal}')
-    g2.remove_edges_from(removal)
-
-    start_time = datetime.now()
-    all_paths = 0   
-    for predecessor in dac_predecessors:
-        path_count = 0
-        for path in nx.all_simple_paths(g2, fft_node, predecessor ):
-            path_count += 1
-            current_time = datetime.now()
-            duration_min = (current_time - start_time).total_seconds()/60
-            print(f'Elapsed time: {duration_min} min:: {path_count}: {path}')
-
-        print(f'Elapsed time: {duration_min} min:: From {fft_node} to {predecessor}: Paths are {path_count}')
-        all_paths = all_paths * path_count if path_count > 0 else all_paths
-
-    current_time = datetime.now()
-    duration_min = (current_time - start_time).total_seconds()/60
-    print(f'Elapsed time: {duration_min} min:: From {fft_node} to {dac_node}: Paths are {all_paths}')
-
+    # print(f'Number of paths from {start_node} to {end_node}: {counts[-1]}')
+    return counts[-1]
+          
 def main():
     # # Part 1
-    execute_part_1 = False
+    execute_part_1 = True
     if execute_part_1:
         start_node = 'you'
         fname = r'Day_11\inputs.txt'
@@ -552,15 +89,36 @@ def main():
     end_node = 'dac'
     fname = r'Day_11\inputs.txt'
     # fname = r'Day_11\sample_inputs_part2.txt'
-    fname = r'Day_11\test_case.txt'
-    part2_solution_b(fname)
 
-    # starting from srv to out is just too many routes to traverse end to end
-    # break it up
-    # from trial error, 
+    paths1 = 1
+    paths2 = 1
+    paths3 = 1 
+    paths1 = part2_solution(fname, K_START_NODE, start_node)
+    paths2 = part2_solution(fname, start_node, end_node)
+    paths3 = part2_solution(fname, end_node, K_END_NODE)
+
+    print(f'Results:')
+    print(f'Paths from {K_START_NODE} to {start_node}: {paths1}')
+    print(f'Paths from {start_node} to {end_node}: {paths2}')
+    print(f'Paths from {end_node} to {K_END_NODE}: {paths3}')
+    paths = prod([paths1, paths2, paths3])
+    print(f'Paths from {K_START_NODE} to {K_END_NODE} visiting {start_node} and {end_node}: {paths}')
+
+    # Answer is: 479511112939968
+    # Paths from svr to fft: 2588
+    # Paths from fft to dac: 18007824
+    # Paths from dac to out: 10289
+    # Paths from svr to out visiting fft and dac: 479511112939968
+    
+    # using nx.all_simple_paths works for smaller graphs or node set. 
+    # It was successful and within reasonable computational time to discover
+    # paths from svr to fft, and dac to out by breaking them up
     # svr to fft is 2588 paths (with no dac inbetween)
     # dac to out is 10,289 paths (with no fft inbetween)
-
+    # but the approach was not reasonable to fft to dac.
+    # The code was started on "2025-12-21T15:08:25::Starting counting all paths from svr to fft"
+    # and as of 2026-01-04 15:30 (2 weeks later), it was still running!
+    # A parallel code that was printing each path found had found 4,337,797 paths of the 18,007,824 paths (~25% of the way there!)  
 
 if __name__ == '__main__':
     main()
